@@ -1,0 +1,1 @@
+datas=[('Manually_anonymized_control_files/*', 'Manually_anonymized_control_files'), ('Anonimized_by_Anonymer/*', 'Anonimized_by_Anonymer')]

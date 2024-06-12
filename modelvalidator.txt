@@ -1,0 +1,269 @@
+import csv
+import pickle
+import pandas as pd
+import numpy as np
+import time
+import datetime
+import torch
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+import transformers
+from transformers import BertTokenizer, BertConfig
+from transformers import get_linear_schedule_with_warmup
+from transformers import BertForTokenClassification, AdamW
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import multilabel_confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+
+# Load your validation data
+validation_data = pd.read_csv('path_to_your_validation_data.csv', sep='|', quoting=csv.QUOTE_NONE).fillna(method='ffill')
+
+tag_values = list(set(data['token'].values))
+tag_values.append('PAD')
+tag2idx = {t: i for i, t in enumerate(tag_values)}
+
+tokenizer = BertTokenizer.from_pretrained('bert-base-german-cased', do_lower_case=False)
+
+class YourValidationDataset(torch.utils.data.Dataset):
+    def __init__(self, data, tokenizer):
+        self.sentences = data.groupby('sentence_number').apply(lambda s: [(w, t) for w, t in zip(s['word'].values.tolist(), s['token'].values.tolist())])
+        self.tokenizer = tokenizer
+
+    def __len__(self):
+        return len(self.sentences)
+
+    def __getitem__(self, index):
+        sentence = self.sentences[index]
+        words = [word[0] for word in sentence]
+        labels = [word[1] for word in sentence]
+
+        # Tokenize and pad the input sequence
+        tokenized_inputs = tokenizer(words, padding=True, truncation=True, max_length=75, return_tensors="pt")
+
+        input_ids = tokenized_inputs["input_ids"]
+        attention_mask = tokenized_inputs["attention_mask"]
+
+        # Convert labels to indices using tag2idx
+        label_ids = [tag2idx[label] for label in labels]
+        label_ids = pad_sequences([label_ids], maxlen=75, dtype="long", value=tag2idx["PAD"], truncating="post", padding="post")[0]
+
+        # Convert everything to PyTorch tensors
+        input_ids = torch.tensor(input_ids)
+        attention_mask = torch.tensor(attention_mask)
+        label_ids = torch.tensor(label_ids)
+
+        return input_ids, attention_mask, label_ids
+
+# Create an instance of your validation dataset
+validation_dataset = YourValidationDataset(validation_data, tokenizer)
+
+# Create a DataLoader for the validation dataset
+validation_dataloader = DataLoader(validation_dataset, batch_size=64, shuffle=False)
+
+# Define your validation dataset class
+class YourValidationDataset(torch.utils.data.Dataset):
+    def __init__(self, data, tokenizer):
+        """
+        Initialization method for the dataset.
+
+        Parameters:
+        - data (pd.DataFrame): The validation data, assumed to have columns 'sentence_number', 'word', and 'token'.
+        - tokenizer (transformers.BertTokenizer): The BERT tokenizer.
+
+        Note:
+        - Assumes that the data structure is similar to the training data.
+        """
+        self.sentences = data.groupby('sentence_number').apply(lambda s: [(w, t) for w, t in zip(s['word'].values.tolist(), s['token'].values.tolist())])
+        self.tokenizer = tokenizer
+
+    def __len__(self):
+        """
+        Return the total number of samples in the dataset.
+
+        Returns:
+        - int: The number of samples in the dataset.
+        """
+        return len(self.sentences)
+
+    def __getitem__(self, index):
+        """
+        Return a sample from the dataset.
+
+        Parameters:
+        - index (int): Index of the sample to retrieve.
+
+        Returns:
+        - tuple: A tuple containing input_ids (torch.Tensor), attention_mask (torch.Tensor), and label_ids (torch.Tensor).
+        """
+        sentence = self.sentences[index]
+        words = [word[0] for word in sentence]
+        labels = [word[1] for word in sentence]
+
+        # Tokenize and pad the input sequence
+        tokenized_inputs = self.tokenizer(words, padding=True, truncation=True, max_length=75, return_tensors="pt")
+
+        input_ids = tokenized_inputs["input_ids"]
+        attention_mask = tokenized_inputs["attention_mask"]
+
+        # Convert labels to indices using tag2idx
+        label_ids = [tag2idx[label] for label in labels]
+        label_ids = pad_sequences([label_ids], maxlen=75, dtype="long", value=tag2idx["PAD"], truncating="post", padding="post")[0]
+
+        # Convert everything to PyTorch tensors
+        input_ids = torch.tensor(input_ids)
+        attention_mask = torch.tensor(attention_mask)
+        label_ids = torch.tensor(label_ids)
+
+        return input_ids, attention_mask, label_ids
+
+# Create an instance of your validation dataset
+validation_dataset = YourValidationDataset(validation_data, tokenizer)
+
+# Create a DataLoader for the validation dataset
+validation_dataloader = DataLoader(validation_dataset, batch_size=64, shuffle=False)
+
+# Initialize your validation model
+validation_model = BertForTokenClassification.from_pretrained('bert-base-german-cased', num_labels=len(tag2idx), output_attentions=False, output_hidden_states=False)
+validation_model.to(device)
+
+# Set up your validation optimizer and scheduler
+# ...
+
+# Set the model in evaluation mode
+validation_model.eval()
+
+# Initialize lists to store predictions and labels
+all_predictions = []
+all_labels = []
+
+# Iterate over batches in the validation dataloader
+for batch in validation_dataloader:
+    # Extract inputs and labels from the batch
+    input_ids, attention_mask, labels = batch
+
+    # Move tensors to the same device as the model
+    input_ids = input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+    labels = labels.to(device)
+
+    # Disable gradient computation
+    with torch.no_grad():
+        # Forward pass
+        outputs = validation_model(input_ids, attention_mask=attention_mask, labels=labels)
+
+    # Extract logits from the output
+    logits = outputs.logits
+
+    # Apply softmax to get probabilities
+    probabilities = torch.nn.functional.softmax(logits, dim=2)
+
+    # Get the predicted labels for each token
+    predictions = torch.argmax(probabilities, dim=2)
+
+    # Append predictions and labels to the lists
+    all_predictions.extend(predictions.cpu().numpy().tolist())
+    all_labels.extend(labels.cpu().numpy().tolist())
+
+# Flatten the lists
+flat_predictions = [item for sublist in all_predictions for item in sublist]
+flat_labels = [item for sublist in all_labels for item in sublist]
+
+# Model in evaluation mode
+model.eval()
+
+# Lists to store predictions and true labels
+predictions, true_labels = [], []
+
+# Loop through the validation dataset
+for batch in validation_dataloader:
+    # Unpack the batch
+    input_ids, attention_mask, label_ids = batch
+
+    # Move tensors to the device
+    input_ids = input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+    label_ids = label_ids.to(device)
+
+    # Disable gradient calculation
+    with torch.no_grad():
+        # Forward pass
+        outputs = model(input_ids, token_type_ids=None, attention_mask=attention_mask, labels=label_ids)
+
+    # Get the predicted labels
+    logits = outputs[1].detach().cpu().numpy()
+    predicted_labels = np.argmax(logits, axis=2)
+
+    # Flatten and append predictions and true labels
+    predictions.extend(predicted_labels)
+    true_labels.extend(label_ids.to('cpu').numpy())
+
+# Convert predictions and true labels to NumPy arrays
+predictions = np.array(predictions)
+true_labels = np.array(true_labels)
+
+# Flatten the arrays to remove padding
+pred_tags = [tag_values[p_i] for p, l in zip(predictions, true_labels) for p_i, l_i in zip(p, l) if tag_values[l_i] != 'PAD']
+true_tags = [tag_values[l_i] for l in true_labels for l_i in l if tag_values[l_i] != 'PAD']
+
+# Print and compute metrics
+print(f"Validation Accuracy: {accuracy_score(true_tags, pred_tags)}")
+print(f"Validation Precision: {precision_score(true_tags, pred_tags, average='weighted')}")
+print(f"Validation Recall: {recall_score(true_tags, pred_tags, average='weighted')}")
+print(f"Validation F1-Score: {f1_score(true_tags, pred_tags, average='weighted')}")
+
+# Create a multilabel confusion matrix
+tags = list(set(true_tags))
+matrix = multilabel_confusion_matrix(true_tags, pred_tags, labels=tags)
+
+# Dictionary to store metrics for each class
+tags_eval = {}
+
+# Loop through classes and compute metrics
+for t, m in zip(tags, matrix):
+    tag = t.split('-')[-1]
+    if tag not in tags_eval:
+        tags_eval[tag] = [[], [], [], []]  # tp, tn, fp, fn
+
+    tn, fp = m[0]
+    fn, tp = m[1]
+
+    tags_eval[tag][0].append(tp)
+    tags_eval[tag][1].append(tn)
+    tags_eval[tag][2].append(fp)
+    tags_eval[tag][3].append(fn)
+
+# Dictionary mapping classes to their human-readable names
+# Update this dictionary based on your specific classes
+classes = {'Person': 'PER',
+           'Gericht': 'GRT',
+           'Richter': 'RR',
+           'Anwalt': 'AN',
+           'Justizfachangestellte': 'JA',
+           'Land': 'LD', 'Stadt': 'ST', 'Strasse': 'STR', 'Landschaft': 'LDS',
+           'Organization': 'ORG', 'Unternehmen': 'UN', 'Institution': 'INN',  'Marke': 'MRK',
+           'Gesetz': 'GS', 'Verordnung': 'VO', 'Europa Norm': 'EUN', 'Vorschrift': 'VS', 'Vertrag': 'VT', 'Rechtsprechung': 'RS', 'Literatur': 'LIT',
+           'outside': 'O'}
+
+# Loop through classes and print metrics
+for c in classes:
+    t = classes[c]
+    if t in tags_eval:
+        v = tags_eval[t]
+
+        precision = sum(v[0]) / (sum(v[0]) + sum(v[2]))
+        recall = sum(v[0]) / (sum(v[0]) + sum(v[3]))
+        f1 = 2 * ((precision * recall) / (precision + recall))
+
+        # Update the classes dictionary with F1, Precision, and Recall
+        classes[c] = [f"F1:{round(f1*100, 2)}", f"P:{round(precision*100, 2)}", f"R:{round(recall*100, 2)}"]
+    else:
+        print(f'{t} not in tags_eval')
+
+# Print the updated classes dictionary
+print(classes)
+
+# Save the validation model
+validation_model.save_pretrained('path_to_save_validation_model')
+tokenizer.save_pretrained('path_to_save_validation_model')
