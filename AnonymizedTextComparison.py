@@ -106,6 +106,20 @@ class AnonymizedTextComparison(QtWidgets.QWidget):
         # Add copying action
         self.add_copy_action()
 
+        # Add text areas for all_manual_texts and all_trained_texts
+        side_by_side_layout = QtWidgets.QHBoxLayout()
+        self.all_manual_texts_label = QtWidgets.QLabel("All Manual Texts:")
+        self.all_trained_texts_label = QtWidgets.QLabel("All Trained Texts:")
+        self.all_manual_texts_area = QtWidgets.QTextEdit()
+        self.all_trained_texts_area = QtWidgets.QTextEdit()
+
+        side_by_side_layout.addWidget(self.all_manual_texts_label)
+        side_by_side_layout.addWidget(self.all_manual_texts_area)
+        side_by_side_layout.addWidget(self.all_trained_texts_label)
+        side_by_side_layout.addWidget(self.all_trained_texts_area)
+
+        main_layout.addLayout(side_by_side_layout)
+
     def add_copy_button_to_textarea(self, text_area):
         copy_button = QToolButton()
         copy_button.setIcon(QIcon('images//content_copy_FILL0_wght400_GRAD0_opsz24.png'))
@@ -156,8 +170,8 @@ class AnonymizedTextComparison(QtWidgets.QWidget):
             return
 
         # Call the process_folders function to execute the code
-        
-        manual_results, trained_results, summary_text, missing_patterns_dict = process_folders(self.manual_text_folder, self.trained_text_folder, self.missing_patterns_manual_text, self.missing_patterns_trained_text)
+        manual_results, trained_results, summary_text, missing_patterns_dict, all_manual_texts, all_trained_texts = process_folders(
+            self.manual_text_folder, self.trained_text_folder, self.missing_patterns_manual_text, self.missing_patterns_trained_text)
 
         # Display results in the respective text areas
         manual_text = '\n'.join(manual_results)
@@ -181,7 +195,6 @@ class AnonymizedTextComparison(QtWidgets.QWidget):
             missing_patterns_trained_text = '\n'.join(missing_in_trained)
         self.missing_patterns_trained_text_area.setPlainText(missing_patterns_trained_text)
 
-
         # Fill missing patterns in manual files text area
         missing_patterns_manual_text = ""
         missing_in_manual = missing_in_manual_Text
@@ -198,6 +211,9 @@ class AnonymizedTextComparison(QtWidgets.QWidget):
         self.summary_text.setPlainText(
             f"Summary of above results are:\nManual Results:\n{manual_summary}\n\nTrained Results:\n{trained_summary}\n\n{summary_text}")
 
+        # Set the all_manual_texts and all_trained_texts in the respective text areas
+        self.all_manual_texts_area.setPlainText(all_manual_texts)
+        self.all_trained_texts_area.setPlainText(all_trained_texts)
 
     def create_summary(self, results):
         summary = ""
@@ -245,7 +261,7 @@ def main():
     app = QtWidgets.QApplication(sys.argv)
     ex = AnonymizedTextComparison()
     ex.setWindowTitle('Anonymized Text Comparison(Testing Tool)')
-    ex.setGeometry(100, 100, 800, 400)  # Increased the width to accommodate two text areas
+    ex.setGeometry(100, 100, 800, 600)  # Increased the width and height to accommodate new text areas
     ex.show()
     sys.exit(app.exec_())
 
