@@ -1,10 +1,29 @@
 import re
 import os
 
+# \b: Ensures the match starts at a word boundary.
+# (?:[A-Za-z]{3})?: Matches an optional sequence of exactly three alphabetic characters (both uppercase and lowercase).
+# [A-WYZ]{0,2}: Matches 0 to 2 uppercase alphabetic characters, excluding 'X'.
+# \d*: Matches 0 or more digits.
+# [A-WYZ]*: Matches 0 or more uppercase alphabetic characters, excluding 'X'.
+# X: Matches exactly one 'X' character.
+# [A-WYZ]*: Matches 0 or more uppercase alphabetic characters, excluding 'X'.
+# \d*: Matches 0 or more digits.
+# (?:X[A-WYZ]*\d*)*: Matches 0 or more sequences where each sequence starts with an 'X', followed by 0 or more uppercase alphabetic characters (excluding 'X'), followed by 0 or more digits.
+# X+: Matches one or more 'X' characters.
+# [A-WYZ]*: Matches 0 or more uppercase alphabetic characters, excluding 'X'.
+# \d*: Matches 0 or more digits.
+# (?:-\d+)?: Matches an optional sequence that starts with a hyphen '-' followed by one or more digits.
+# \b: Ensures the match ends at a word boundary.
+# \(\*\*\[\w+-\d+\]\*\*\*\*\*\*\): Matches the anonymized placeholders like (**[RR-5]*****)
+
 # Updated regex patterns to handle variations
 generic_patterns = [
     r'\b(?:[A-Za-z]{3})?[A-WYZ]{0,2}\d*[A-WYZ]*X[A-WYZ]*\d*(?:X[A-WYZ]*\d*)*X+[A-WYZ]*\d*(?:-\d+)?\b',
     r'\b([A-Za-z]{1}[A-Z]*)-([\w]+)\b',
+    r'\(\*\*\[[A-Z]+-\d+\]\*{5}\)',
+    r'\(\*\*\[\w+-\d+\]\*\*\*\*\*\*\)',  # Pattern to match placeholders like (**[RR-5]*****)
+    r'\(\*\*\[-\d+\]\*\*\*\*\*\*\)'  # Pattern to match placeholders like (**[-1]*****)
 ]
 
 # Function to find and replace generic patterns in a given text
@@ -14,9 +33,16 @@ def find_generic_patterns(text):
         matches = re.finditer(pattern, text)
         for match in matches:
             matched_text = match.group()
-            # Add "|" before and after the matched pattern
-            text = text.replace(matched_text, f"|{matched_text}|")
-            generic_patterns_result.append(f"|{matched_text}|")
+            # if not matched_text.startswith("(**[") and not matched_text.endswith("*)"):
+            #     # Add "(**" before and "*)" after the matched pattern
+            #     matched_text = text.replace(matched_text, f"(**{matched_text}*)")
+            
+            if not matched_text.startswith("|") and not matched_text.endswith("|"):
+                # # Remove text starting with hyphen and number like this "-2" from the matched pattern
+                # matched_text = re.sub(r'-\d+', '', matched_text)
+                # Add "|" before and after the matched pattern
+                text = text.replace(matched_text, f"|{matched_text}|")
+            generic_patterns_result.append(matched_text)
 
     return generic_patterns_result, text
 
